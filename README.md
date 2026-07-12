@@ -1,7 +1,7 @@
 <h1 align="center">🦸‍♀️ Hygiene Hero – Smart Sanitation Learning App</h1>
 
 <p align="center">
-  <img src="./assets/images/banner-dark.jpeg" alt="Hygiene Hero Banner" width="800"/>
+  <img src="./assets/game/new banner.png" alt="Hygiene Hero Banner" width="800"/>
 </p>
 
 <p align="center">
