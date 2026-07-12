@@ -1,6 +1,26 @@
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, deleteUser, signInWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc, getDoc } from 'firebase/firestore';
 import { auth, db } from './firebase';
+
+function getAuthErrorMessage(error: any) {
+  const code = error?.code as string | undefined;
+
+  switch (code) {
+    case 'auth/email-already-in-use':
+      return 'That email is already registered. Try signing in instead.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Password must be at least 6 characters.';
+    case 'auth/network-request-failed':
+      return 'Network error while contacting Firebase. Please check your connection and try again.';
+    case 'permission-denied':
+    case 'firestore/permission-denied':
+      return 'Account was created, but Firestore blocked saving the user profile. Update your Firebase Firestore rules to allow users to create their own profile document.';
+    default:
+      return error?.message || 'Authentication failed.';
+  }
+}
 
 export async function signIn(email: string, password: string) {
   console.log('signIn called with:', { email: email.trim(), password: password ? '***' : 'empty' });
@@ -26,11 +46,13 @@ export async function signIn(email: string, password: string) {
 }
 
 export async function signUp(email: string, password: string, displayName?: string, role: string = 'student') {
-  const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
-  if (displayName) {
-    await updateProfile(cred.user, { displayName });
-  }
   try {
+    const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
+
+    if (displayName) {
+      await updateProfile(cred.user, { displayName });
+    }
+
     await setDoc(
       doc(db, 'users', cred.user.uid),
       {
@@ -42,11 +64,21 @@ export async function signUp(email: string, password: string, displayName?: stri
       },
       { merge: true }
     );
+
+    return cred.user;
   } catch (err: any) {
-    // Surface Firestore errors clearly to the caller
     console.error('Failed to save user profile to Firestore:', err);
-    throw new Error(err?.message || 'Failed to save user profile');
+
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      try {
+        await deleteUser(currentUser);
+      } catch (deleteError) {
+        console.error('Failed to roll back partially created auth user:', deleteError);
+      }
+    }
+
+    throw new Error(getAuthErrorMessage(err));
   }
-  return cred.user;
 }
 
